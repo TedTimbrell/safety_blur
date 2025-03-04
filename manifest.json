@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "Video Blur Safety",
+  "version": "1.0",
+  "description": "Selectively blur videos while keeping faces visible using TensorFlow.js",
+  "permissions": [
+    "activeTab",
+    "storage",
+    "scripting"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["styles.css"]
+    }
+  ],
+  "web_accessible_resources": [{
+    "resources": [
+      "lib/tensorflow.min.js",
+      "lib/face-detection.min.js",
+      "lib/face-detection-mediapipe.min.js",
+      "lib/face_detection_short.binarypb",
+      "lib/face_detection_short_range.tflite",
+      "lib/face_detection_solution_simd_wasm_bin.js",
+      "lib/face_detection_solution_wasm_bin.js",
+      "lib/face_detection_solution_simd_wasm.wasm",
+      "lib/face_detection_solution_wasm.wasm",
+      "lib/face_detection_solution_simd_wasm_bin.wasm",
+      "lib/face_detection_solution_wasm_bin.wasm",
+      "face-detection.js"
+    ],
+    "matches": ["<all_urls>"]
+  }],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": "icons/icon.svg"
+  },
+  "icons": {
+    "128": "icons/icon.svg"
+  }
+} 
