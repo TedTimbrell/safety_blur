@@ -25,17 +25,8 @@
   "web_accessible_resources": [{
     "resources": [
       "lib/tensorflow.min.js",
-      "lib/face-detection.min.js",
-      "lib/face-detection-mediapipe.min.js",
-      "lib/face_detection_short.binarypb",
-      "lib/face_detection_short_range.tflite",
-      "lib/face_detection_solution_simd_wasm_bin.js",
-      "lib/face_detection_solution_wasm_bin.js",
-      "lib/face_detection_solution_simd_wasm.wasm",
-      "lib/face_detection_solution_wasm.wasm",
-      "lib/face_detection_solution_simd_wasm_bin.wasm",
-      "lib/face_detection_solution_wasm_bin.wasm",
-      "face-detection.js"
+      "lib/pose-detection.min.js",
+      "pose-detection.js"
     ],
     "matches": ["<all_urls>"]
   }],

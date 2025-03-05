@@ -16,7 +16,7 @@ function createOverlay() {
     }
 }
 
-// Load TensorFlow.js and Face Detection dynamically
+// Load TensorFlow.js and Pose Detection dynamically
 async function loadScripts() {
     console.debug('Starting to load scripts...');
     createOverlay();
@@ -26,19 +26,14 @@ async function loadScripts() {
     tfScript.src = chrome.runtime.getURL('lib/tensorflow.min.js');
     console.debug('Loading TensorFlow from:', tfScript.src);
     
-    // Load TensorFlow.js face detection model
-    const faceDetectionScript = document.createElement('script');
-    faceDetectionScript.src = chrome.runtime.getURL('lib/face-detection.min.js');
-    console.debug('Loading Face Detection from:', faceDetectionScript.src);
-
-    // Load MediaPipe face detection
-    const mediapipeScript = document.createElement('script');
-    mediapipeScript.src = chrome.runtime.getURL('lib/face-detection-mediapipe.min.js');
-    console.debug('Loading MediaPipe Face Detection from:', mediapipeScript.src);
+    // Load TensorFlow.js pose detection model
+    const poseDetectionScript = document.createElement('script');
+    poseDetectionScript.src = chrome.runtime.getURL('lib/pose-detection.min.js');
+    console.debug('Loading Pose Detection from:', poseDetectionScript.src);
     
-    const detectionLogicScript = document.createElement('script');
-    detectionLogicScript.src = chrome.runtime.getURL('face-detection.js');
-    console.debug('Loading Detection Logic from:', detectionLogicScript.src);
+    const poseDetectionLogicScript = document.createElement('script');
+    poseDetectionLogicScript.src = chrome.runtime.getURL('pose-detection.js');
+    console.debug('Loading Pose Detection Logic from:', poseDetectionLogicScript.src);
     
     document.head.appendChild(tfScript);
     await new Promise(resolve => {
@@ -51,48 +46,36 @@ async function loadScripts() {
             resolve();
         };
     });
-    
-    document.head.appendChild(faceDetectionScript);
+
+    document.head.appendChild(poseDetectionScript);
     await new Promise(resolve => {
-        faceDetectionScript.onload = () => {
-            console.log('Face Detection loaded successfully');
+        poseDetectionScript.onload = () => {
+            console.log('Pose Detection loaded successfully');
             resolve();
         };
-        faceDetectionScript.onerror = (error) => {
-            console.error('Error loading Face Detection:', error);
+        poseDetectionScript.onerror = (error) => {
+            console.error('Error loading Pose Detection:', error);
             resolve();
         };
     });
 
-    document.head.appendChild(mediapipeScript);
+    document.head.appendChild(poseDetectionLogicScript);
     await new Promise(resolve => {
-        mediapipeScript.onload = () => {
-            console.log('MediaPipe Face Detection loaded successfully');
+        poseDetectionLogicScript.onload = () => {
+            console.log('Pose Detection Logic loaded successfully');
             resolve();
         };
-        mediapipeScript.onerror = (error) => {
-            console.error('Error loading MediaPipe Face Detection:', error);
-            resolve();
-        };
-    });
-    
-    document.head.appendChild(detectionLogicScript);
-    await new Promise(resolve => {
-        detectionLogicScript.onload = () => {
-            console.log('Detection Logic loaded successfully');
-            resolve();
-        };
-        detectionLogicScript.onerror = (error) => {
-            console.error('Error loading Detection Logic:', error);
+        poseDetectionLogicScript.onerror = (error) => {
+            console.error('Error loading Pose Detection Logic:', error);
             resolve();
         };
     });
     
     // Get the base URL for the extension
     const extensionUrl = chrome.runtime.getURL('').replace(/\/$/, '');
-    console.debug('All scripts loaded, initializing face detection with solution path:', extensionUrl);
+    console.debug('All scripts loaded, initializing pose detection with solution path:', extensionUrl);
     window.postMessage({ 
-        type: 'INIT_FACE_DETECTION',
+        type: 'INIT_POSE_DETECTION',
         solutionPath: extensionUrl
     }, '*');
 }
@@ -207,89 +190,6 @@ function updateFaceCutouts(videoElement, faces) {
     overlayContainer.appendChild(videoContainer);
 }
 
-function processFaceDetection(videoElement) {
-    if (!videoElement) {
-        console.debug('Skipping face detection: no video');
-        return;
-    }
-    
-    // Ensure video has an ID
-    if (!videoElement.id) {
-        videoElement.id = `blur-safety-video-${videoCounter++}`;
-        console.debug('Assigned video ID:', videoElement.id);
-    }
-
-    // Clear any existing processing timeout
-    if (processingTimeout) {
-        clearTimeout(processingTimeout);
-    }
-
-    // If already processing, schedule a retry
-    if (isProcessing) {
-        console.debug('Already processing face detection, will retry in 1s');
-        processingTimeout = setTimeout(() => {
-            console.debug('Resetting processing flag due to timeout');
-            isProcessing = false;
-            processFaceDetection(videoElement);
-        }, 1000);
-        return;
-    }
-
-    // Wait for video to be ready
-    if (videoElement.readyState < 2) { // HAVE_CURRENT_DATA
-        console.debug('Video not ready yet, waiting for metadata...');
-        const onceHandler = () => {
-            console.debug('Video data loaded, retrying face detection');
-            videoElement.removeEventListener('loadeddata', onceHandler);
-            processFaceDetection(videoElement);
-        };
-        videoElement.addEventListener('loadeddata', onceHandler);
-        return;
-    }
-
-    // Check if video is visible and playing
-    const rect = videoElement.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0 || !isElementInViewport(videoElement)) {
-        console.debug('Video not visible or has zero dimensions, skipping detection');
-        return;
-    }
-
-    if (videoElement.paused || videoElement.ended || !videoElement.currentTime) {
-        console.debug('Video is not actively playing, skipping detection');
-        return;
-    }
-    
-    console.debug('Processing face detection for video:', videoElement.id, {
-        readyState: videoElement.readyState,
-        paused: videoElement.paused,
-        currentTime: videoElement.currentTime,
-        dimensions: `${rect.width}x${rect.height}`
-    });
-
-    isProcessing = true;
-    
-    // Set a safety timeout to reset the processing flag
-    processingTimeout = setTimeout(() => {
-        console.debug('Resetting processing flag due to timeout');
-        isProcessing = false;
-    }, 5000);
-
-    window.postMessage({ 
-        type: 'DETECT_FACES',
-        videoSelector: `#${videoElement.id}`
-    }, '*');
-}
-
-function isElementInViewport(el) {
-    const rect = el.getBoundingClientRect();
-    return (
-        rect.top >= 0 &&
-        rect.left >= 0 &&
-        rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
-        rect.right <= (window.innerWidth || document.documentElement.clientWidth)
-    );
-}
-
 // Function to reinitialize video detection
 function reinitializeVideoDetection() {
     console.debug('Reinitializing video detection');
@@ -314,13 +214,23 @@ function reinitializeVideoDetection() {
         clearTimeout(processingTimeout);
     }
     
-    // Reinitialize face detection
-    console.debug('Reloading scripts and reinitializing face detection');
+    // Reinitialize detection
+    console.debug('Reloading scripts and reinitializing detection');
     loadScripts();
     
     // Set up detection for all videos
     videos.forEach(video => {
-        video.blurSafetyInterval = setInterval(() => processFaceDetection(video), 1000 / FPS);
+        if (!video.id) {
+            video.id = `blur-safety-video-${videoCounter++}`;
+        }
+        video.blurSafetyInterval = setInterval(() => {
+            if (!isProcessing) {
+                window.postMessage({ 
+                    type: 'DETECT_POSES',
+                    videoSelector: `#${video.id}`
+                }, '*');
+            }
+        }, 1000 / FPS);
     });
 }
 
@@ -332,40 +242,89 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 });
 
+function calculateFaceBoxFromPoseKeypoints(keypoints) {
+    // Get facial keypoints
+    const facePoints = ['nose', 'left_eye', 'right_eye', 'left_ear', 'right_ear'].map(name => 
+        keypoints.find(kp => kp.name === name)
+    ).filter(kp => kp && kp.score > 0.3); // Only use points with confidence > 0.3
+
+    if (facePoints.length < 2) {
+        return null; // Not enough points to make a reliable box
+    }
+
+    // Find the bounding box of the face points
+    const xs = facePoints.map(p => p.x);
+    const ys = facePoints.map(p => p.y);
+    const minX = Math.min(...xs);
+    const maxX = Math.max(...xs);
+    const centerY = (Math.min(...ys) + Math.max(...ys)) / 2; // Use center point of detected Y coordinates
+
+    // Calculate base width
+    const width = maxX - minX;
+    
+    // Add horizontal padding (25% of width on each side)
+    const paddedWidth = width * 1.5; // Original width + 25% padding on each side
+    
+    // Set height to exactly 1.5 times the padded width
+    const height = paddedWidth * 1.5;
+    
+    return {
+        x: Math.max(0, minX - width * 0.25), // Add 25% padding on each side
+        y: Math.max(0, centerY - height / 2), // Center the box vertically around the detected points
+        width: paddedWidth,
+        height: height
+    };
+}
+
 // Listen for messages from the page script
 window.addEventListener('message', (event) => {
     if (event.source !== window) return;
     console.debug('Received message:', event.data.type);
 
     switch (event.data.type) {
-        case 'FACE_DETECTION_READY':
-            console.log('Face detection model loaded, processing existing videos');
+        case 'POSE_DETECTION_READY':
+            console.log('Pose detection model loaded, processing existing videos');
             const videos = document.querySelectorAll('video');
             console.debug('Found existing videos:', videos.length);
             videos.forEach(video => {
-                video.blurSafetyInterval = setInterval(() => processFaceDetection(video), 1000 / FPS);
+                if (!video.id) {
+                    video.id = `blur-safety-video-${videoCounter++}`;
+                }
+                video.blurSafetyInterval = setInterval(() => {
+                    if (!isProcessing) {
+                        window.postMessage({ 
+                            type: 'DETECT_POSES',
+                            videoSelector: `#${video.id}`
+                        }, '*');
+                    }
+                }, 1000 / FPS);
             });
             break;
 
-        case 'FACE_DETECTION_ERROR':
-            console.error('Face detection error:', event.data.error);
+        case 'POSE_DETECTION_ERROR':
+            console.error('Pose detection error:', event.data.error);
             if (processingTimeout) {
                 clearTimeout(processingTimeout);
             }
             isProcessing = false;
             break;
 
-        case 'FACE_DETECTION_RESULT':
-            console.debug('Received face detection result for:', event.data.videoSelector);
-            if (processingTimeout) {
-                clearTimeout(processingTimeout);
-            }
-            const video = document.querySelector(event.data.videoSelector);
-            if (video) {
-                console.debug('Updating face cutouts with faces:', event.data.faces.length);
-                updateFaceCutouts(video, event.data.faces);
-            } else {
-                console.debug('Could not find video element');
+        case 'POSE_DETECTION_SKIP':
+            console.debug('Skipping pose detection:', event.data.reason);
+            isProcessing = false;
+            break;
+
+        case 'POSE_DETECTION_RESULT':
+            console.debug('Received pose detection result for:', event.data.videoSelector);
+            const poseVideo = document.querySelector(event.data.videoSelector);
+            if (poseVideo) {
+                const faces = event.data.poses
+                    .map(pose => calculateFaceBoxFromPoseKeypoints(pose.keypoints))
+                    .filter(face => face !== null);
+                
+                // Always update cutouts, even when no faces are found
+                console.debug('Updating face cutouts with faces from pose detection:', faces.length);
+                updateFaceCutouts(poseVideo, faces);
             }
             isProcessing = false;
             break;
@@ -383,7 +342,17 @@ const observer = new MutationObserver((mutations) => {
         mutation.addedNodes.forEach((node) => {
             if (node.nodeName === 'VIDEO') {
                 console.debug('New video element detected:', node);
-                node.blurSafetyInterval = setInterval(() => processFaceDetection(node), 1000 / FPS);
+                if (!node.id) {
+                    node.id = `blur-safety-video-${videoCounter++}`;
+                }
+                node.blurSafetyInterval = setInterval(() => {
+                    if (!isProcessing) {
+                        window.postMessage({ 
+                            type: 'DETECT_POSES',
+                            videoSelector: `#${node.id}`
+                        }, '*');
+                    }
+                }, 1000 / FPS);
             }
         });
     });
@@ -402,8 +371,11 @@ window.addEventListener('resize', () => {
     videos.forEach(video => {
         if (video.id) {
             const cutouts = overlayContainer.querySelectorAll(`.face-cutout[data-video-id="${video.id}"]`);
-            if (cutouts.length > 0) {
-                processFaceDetection(video);
+            if (cutouts.length > 0 && !isProcessing) {
+                window.postMessage({ 
+                    type: 'DETECT_POSES',
+                    videoSelector: `#${video.id}`
+                }, '*');
             }
         }
     });
@@ -420,8 +392,11 @@ window.addEventListener('scroll', () => {
         videos.forEach(video => {
             if (video.id) {
                 const cutouts = overlayContainer.querySelectorAll(`.face-cutout[data-video-id="${video.id}"]`);
-                if (cutouts.length > 0) {
-                    processFaceDetection(video);
+                if (cutouts.length > 0 && !isProcessing) {
+                    window.postMessage({ 
+                        type: 'DETECT_POSES',
+                        videoSelector: `#${video.id}`
+                    }, '*');
                 }
             }
         });
