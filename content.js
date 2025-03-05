@@ -105,48 +105,106 @@ function getVideoPosition(videoElement) {
 
 function updateFaceCutouts(videoElement, faces) {
     console.debug('Updating face cutouts for video, faces found:', faces.length);
+    console.debug('Faces:', faces);
     
-    // Remove existing cutouts for this video
-    const existingCutouts = overlayContainer.querySelectorAll(`.face-cutout[data-video-id="${videoElement.id}"]`);
-    console.debug('Removing existing cutouts:', existingCutouts.length);
-    existingCutouts.forEach(el => el.remove());
+    // Remove existing cutouts and overlay for this video
+    const existingElements = overlayContainer.querySelectorAll(`[data-video-id="${videoElement.id}"]`);
+    console.debug('Removing existing elements:', existingElements.length);
+    existingElements.forEach(el => el.remove());
 
     // Get video position and scale
     const { rect, scale } = getVideoPosition(videoElement);
 
-    // Add new cutouts
-    faces.forEach((face, index) => {
-        console.debug(`Creating cutout ${index} at:`, face);
-        const cutout = document.createElement('div');
-        cutout.className = 'face-cutout';
-        cutout.dataset.videoId = videoElement.id;
+    // Create a container for this video's overlay and cutouts
+    const videoContainer = document.createElement('div');
+    videoContainer.className = 'video-container';
+    videoContainer.dataset.videoId = videoElement.id;
+    videoContainer.style.position = 'fixed';
+    videoContainer.style.left = `${rect.left}px`;
+    videoContainer.style.top = `${rect.top}px`;
+    videoContainer.style.width = `${rect.width}px`;
+    videoContainer.style.height = `${rect.height}px`;
+    videoContainer.style.zIndex = '2147483647';
+    videoContainer.style.pointerEvents = 'none';
 
-        // Calculate position relative to viewport
-        const left = rect.left + (face.x / scale);
-        const top = rect.top + (face.y / scale);
+    // Create the blur overlay
+    const blurOverlay = document.createElement('div');
+    blurOverlay.className = 'video-blur-overlay';
+    blurOverlay.dataset.videoId = videoElement.id;
+
+    // Create clip path for the cutouts
+    if (faces.length > 0) {
+        let clipPath = 'polygon(';
+        
+        // Start with the outer rectangle
+        clipPath += '0% 0%, 100% 0%, 100% 100%, 0% 100%';
+        
+        // Add each face cutout
+        faces.forEach(face => {
+            const left = (face.x / scale) / rect.width * 100;
+            const top = (face.y / scale) / rect.height * 100;
+            const width = (face.width / scale) / rect.width * 100;
+            const height = (face.height / scale) / rect.height * 100;
+            
+            // Move to the start of this cutout (creates a 0-width line)
+            clipPath += `, 0% ${top}%`;
+            
+            // Draw the cutout
+            clipPath += `, ${left}% ${top}%`;
+            clipPath += `, ${left}% ${top + height}%`;
+            clipPath += `, ${left + width}% ${top + height}%`;
+            clipPath += `, ${left + width}% ${top}%`;
+            clipPath += `, ${left}% ${top}%`;
+            
+            // Return to the edge (creates a 0-width line)
+            clipPath += `, 0% ${top}%`;
+        });
+        
+        clipPath += ')';
+        console.debug('Generated clip path:', clipPath);
+        blurOverlay.style.clipPath = clipPath;
+        blurOverlay.style.webkitClipPath = clipPath;
+    }
+
+    videoContainer.appendChild(blurOverlay);
+
+    // Add face boxes
+    faces.forEach((face, index) => {
+        console.debug(`Creating face box ${index} at:`, face);
+        const faceBox = document.createElement('div');
+        faceBox.className = 'face-cutout';
+        faceBox.dataset.videoId = videoElement.id;
+
+        // Calculate position relative to video container
+        const left = face.x / scale;
+        const top = face.y / scale;
         const width = face.width / scale;
         const height = face.height / scale;
 
-        cutout.style.left = `${left}px`;
-        cutout.style.top = `${top}px`;
-        cutout.style.width = `${width}px`;
-        cutout.style.height = `${height}px`;
+        faceBox.style.left = `${left}px`;
+        faceBox.style.top = `${top}px`;
+        faceBox.style.width = `${width}px`;
+        faceBox.style.height = `${height}px`;
         
-        // Add debug label
-        const label = document.createElement('div');
-        label.style.position = 'absolute';
-        label.style.top = '-20px';
-        label.style.left = '0';
-        label.style.background = 'rgba(0, 0, 0, 0.7)';
-        label.style.color = '#fff';
-        label.style.padding = '2px 4px';
-        label.style.fontSize = '10px';
-        label.style.borderRadius = '2px';
-        label.textContent = `Face ${index + 1} (${Math.round(width)}x${Math.round(height)})`;
-        cutout.appendChild(label);
+        // Add debug label if needed
+        if (true) { // Change to a debug flag if needed
+            const label = document.createElement('div');
+            label.style.position = 'absolute';
+            label.style.top = '-20px';
+            label.style.left = '0';
+            label.style.background = 'rgba(0, 0, 0, 0.7)';
+            label.style.color = '#fff';
+            label.style.padding = '2px 4px';
+            label.style.fontSize = '10px';
+            label.style.borderRadius = '2px';
+            label.textContent = `Face ${index + 1} (${Math.round(width)}x${Math.round(height)})`;
+            faceBox.appendChild(label);
+        }
 
-        overlayContainer.appendChild(cutout);
+        videoContainer.appendChild(faceBox);
     });
+
+    overlayContainer.appendChild(videoContainer);
 }
 
 function processFaceDetection(videoElement) {
