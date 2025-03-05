@@ -18,6 +18,25 @@
             margin-top: 0;
             color: #333;
         }
+        .refresh-button {
+            display: block;
+            width: 100%;
+            margin-top: 15px;
+            padding: 8px;
+            background-color: #4285f4;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.2s;
+        }
+        .refresh-button:hover {
+            background-color: #3367d6;
+        }
+        .refresh-button:active {
+            background-color: #2850a7;
+        }
     </style>
 </head>
 <body>
@@ -25,5 +44,7 @@
     <div class="status">
         Face detection is active. Videos on this page will be blurred except for detected faces.
     </div>
+    <button id="refreshButton" class="refresh-button">Refresh Video Detection</button>
+    <script src="popup.js"></script>
 </body>
 </html> 

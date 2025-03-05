@@ -232,6 +232,48 @@ function isElementInViewport(el) {
     );
 }
 
+// Function to reinitialize video detection
+function reinitializeVideoDetection() {
+    console.debug('Reinitializing video detection');
+    
+    // Clear existing intervals and cutouts
+    const videos = document.querySelectorAll('video');
+    videos.forEach(video => {
+        if (video.blurSafetyInterval) {
+            clearInterval(video.blurSafetyInterval);
+            delete video.blurSafetyInterval;
+        }
+    });
+    
+    // Clear existing cutouts
+    if (overlayContainer) {
+        overlayContainer.innerHTML = '';
+    }
+    
+    // Reset processing state
+    isProcessing = false;
+    if (processingTimeout) {
+        clearTimeout(processingTimeout);
+    }
+    
+    // Reinitialize face detection
+    console.debug('Reloading scripts and reinitializing face detection');
+    loadScripts();
+    
+    // Set up detection for all videos
+    videos.forEach(video => {
+        video.blurSafetyInterval = setInterval(() => processFaceDetection(video), 1000 / FPS);
+    });
+}
+
+// Listen for messages from the extension
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    console.debug('Received extension message:', message.type);
+    if (message.type === 'REFRESH_VIDEO_DETECTION') {
+        reinitializeVideoDetection();
+    }
+});
+
 // Listen for messages from the page script
 window.addEventListener('message', (event) => {
     if (event.source !== window) return;
@@ -243,7 +285,7 @@ window.addEventListener('message', (event) => {
             const videos = document.querySelectorAll('video');
             console.debug('Found existing videos:', videos.length);
             videos.forEach(video => {
-                setInterval(() => processFaceDetection(video), 1000 / FPS);
+                video.blurSafetyInterval = setInterval(() => processFaceDetection(video), 1000 / FPS);
             });
             break;
 
@@ -283,7 +325,7 @@ const observer = new MutationObserver((mutations) => {
         mutation.addedNodes.forEach((node) => {
             if (node.nodeName === 'VIDEO') {
                 console.debug('New video element detected:', node);
-                setInterval(() => processFaceDetection(node), 1000 / FPS);
+                node.blurSafetyInterval = setInterval(() => processFaceDetection(node), 1000 / FPS);
             }
         });
     });
