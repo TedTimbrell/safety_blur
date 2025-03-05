@@ -2,9 +2,9 @@ console.log('Face detection script loaded');
 let faceDetectionModel = null;
 
 async function initFaceDetection(solutionPath) {
-    console.log('Initializing face detection...', { solutionPath });
+    console.debug('Initializing face detection...', { solutionPath });
     try {
-        console.log('Creating face detector...');
+        console.debug('Creating face detector...');
         const model = faceDetection.SupportedModels.MediaPipeFaceDetector;
         const detectorConfig = {
             runtime: 'mediapipe',
@@ -18,7 +18,7 @@ async function initFaceDetection(solutionPath) {
                 }
             }
         };
-        console.log('Detector config:', JSON.stringify(detectorConfig, null, 2));
+        console.debug('Detector config:', JSON.stringify(detectorConfig, null, 2));
         const detector = await faceDetection.createDetector(model, detectorConfig);
         console.log('Face detector created successfully');
         faceDetectionModel = detector;
@@ -31,22 +31,22 @@ async function initFaceDetection(solutionPath) {
 
 async function detectFaces(videoSelector) {
     if (!faceDetectionModel) {
-        console.log('Face detection model not initialized');
+        console.debug('Face detection model not initialized');
         window.postMessage({ type: 'FACE_DETECTION_ERROR', error: 'Model not initialized' }, '*');
         return;
     }
     try {
-        console.log('Looking for video element:', videoSelector);
+        console.debug('Looking for video element:', videoSelector);
         const videoElement = document.querySelector(videoSelector);
         if (!videoElement) {
-            console.log('Video element not found');
+            console.debug('Video element not found');
             window.postMessage({ type: 'FACE_DETECTION_ERROR', error: 'Video element not found' }, '*');
             return;
         }
 
         // Check if video is ready
         if (!videoElement.videoWidth || !videoElement.videoHeight) {
-            console.log('Video not ready - dimensions not available');
+            console.debug('Video not ready - dimensions not available');
             window.postMessage({ type: 'FACE_DETECTION_ERROR', error: 'Video dimensions not available' }, '*');
             return;
         }
@@ -54,19 +54,19 @@ async function detectFaces(videoSelector) {
         // Check if video is visible and has non-zero dimensions
         const rect = videoElement.getBoundingClientRect();
         if (rect.width <= 0 || rect.height <= 0) {
-            console.log('Video has zero dimensions in viewport');
+            console.debug('Video has zero dimensions in viewport');
             window.postMessage({ type: 'FACE_DETECTION_ERROR', error: 'Video has zero dimensions' }, '*');
             return;
         }
 
         // Check if video is actually playing
         if (videoElement.paused || videoElement.ended || !videoElement.currentTime) {
-            console.log('Video is not actively playing');
+            console.debug('Video is not actively playing');
             window.postMessage({ type: 'FACE_DETECTION_ERROR', error: 'Video is not playing' }, '*');
             return;
         }
         
-        console.log('Running face detection on video:', {
+        console.debug('Running face detection on video:', {
             videoWidth: videoElement.videoWidth,
             videoHeight: videoElement.videoHeight,
             displayWidth: rect.width,
@@ -81,7 +81,7 @@ async function detectFaces(videoSelector) {
             flipHorizontal: false,
             staticImageMode: false
         });
-        console.log('Face detection complete, faces found:', predictions.length);
+        console.debug('Face detection complete, faces found:', predictions.length);
         
         window.postMessage({
             type: 'FACE_DETECTION_RESULT',
@@ -105,15 +105,15 @@ async function detectFaces(videoSelector) {
 // Listen for messages from the content script
 window.addEventListener('message', async (event) => {
     if (event.source !== window) return;
-    console.log('Face detection script received message:', event.data.type);
+    console.debug('Face detection script received message:', event.data.type);
 
     switch (event.data.type) {
         case 'INIT_FACE_DETECTION':
-            console.log('Received initialization request');
+            console.debug('Received initialization request');
             await initFaceDetection(event.data.solutionPath);
             break;
         case 'DETECT_FACES':
-            console.log('Received face detection request for:', event.data.videoSelector);
+            console.debug('Received face detection request for:', event.data.videoSelector);
             await detectFaces(event.data.videoSelector);
             break;
     }
