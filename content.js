@@ -4,6 +4,72 @@ let videoCounter = 0;
 let overlayContainer = null;
 let processingTimeout = null;
 
+// Face detection history tracking
+const faceDetectionHistory = new Map(); // Map<videoId, Array<{timestamp: number, faces: Array<face>}>>
+const HISTORY_DURATION = 1000; // 1 second history
+const FACE_MATCH_THRESHOLD = 0.2; // 20% of face width/height for position matching
+const REQUIRED_MATCH_RATIO = 0.8; // Must appear in 50% of frames
+
+// Check if two faces match (roughly same position and size)
+function doFacesMatch(face1, face2) {
+    const xDiff = Math.abs(face1.x - face2.x);
+    const yDiff = Math.abs(face1.y - face2.y);
+    const widthDiff = Math.abs(face1.width - face2.width);
+    const heightDiff = Math.abs(face1.height - face2.height);
+    
+    const threshold = Math.max(face1.width, face1.height) * FACE_MATCH_THRESHOLD;
+    
+    return xDiff < threshold && 
+           yDiff < threshold && 
+           widthDiff < threshold && 
+           heightDiff < threshold;
+}
+
+// Check if a face has consistent detection history
+function hasFaceConsistentHistory(videoId, face, currentTime) {
+    const history = faceDetectionHistory.get(videoId) || [];
+    const minTimestamp = currentTime - HISTORY_DURATION;
+    
+    // Remove old entries
+    while (history.length > 0 && history[0].timestamp < minTimestamp) {
+        history.shift();
+    }
+    
+    // Count how many frames in the last second had this face
+    let matchCount = 0;
+    history.forEach(entry => {
+        if (entry.faces.some(f => doFacesMatch(face, f))) {
+            matchCount++;
+        }
+    });
+    
+    // Calculate the ratio of frames where the face was found
+    const matchRatio = history.length > 0 ? matchCount / history.length : 0;
+    return matchRatio >= REQUIRED_MATCH_RATIO;
+}
+
+// Update face detection history
+function updateFaceHistory(videoId, faces) {
+    if (!faceDetectionHistory.has(videoId)) {
+        faceDetectionHistory.set(videoId, []);
+    }
+    
+    const history = faceDetectionHistory.get(videoId);
+    const currentTime = Date.now();
+    
+    // Add new entry
+    history.push({
+        timestamp: currentTime,
+        faces: faces
+    });
+    
+    // Remove old entries
+    const minTimestamp = currentTime - HISTORY_DURATION;
+    while (history.length > 0 && history[0].timestamp < minTimestamp) {
+        history.shift();
+    }
+}
+
 console.log('Content script loaded');
 
 // Create the overlay container
@@ -107,6 +173,17 @@ function updateFaceCutouts(videoElement, faces) {
     console.debug('Updating face cutouts for video, faces found:', faces.length);
     console.debug('Faces:', faces);
     
+    // Update face detection history
+    updateFaceHistory(videoElement.id, faces);
+    
+    // Filter faces based on temporal consistency
+    const currentTime = Date.now();
+    const consistentFaces = faces.filter(face => 
+        hasFaceConsistentHistory(videoElement.id, face, currentTime)
+    );
+    
+    console.debug('Consistent faces after temporal filtering:', consistentFaces.length);
+    
     // Remove existing cutouts and overlay for this video
     const existingElements = overlayContainer.querySelectorAll(`[data-video-id="${videoElement.id}"]`);
     console.debug('Removing existing elements:', existingElements.length);
@@ -133,14 +210,14 @@ function updateFaceCutouts(videoElement, faces) {
     blurOverlay.dataset.videoId = videoElement.id;
 
     // Create clip path for the cutouts
-    if (faces.length > 0) {
+    if (consistentFaces.length > 0) {
         let clipPath = 'polygon(';
         
         // Start with the outer rectangle
         clipPath += '0% 0%, 100% 0%, 100% 100%, 0% 100%';
         
         // Add each face cutout
-        faces.forEach(face => {
+        consistentFaces.forEach(face => {
             const left = (face.x / scale) / rect.width * 100;
             const top = (face.y / scale) / rect.height * 100;
             const width = (face.width / scale) / rect.width * 100;
@@ -169,7 +246,7 @@ function updateFaceCutouts(videoElement, faces) {
     videoContainer.appendChild(blurOverlay);
 
     // Add face boxes
-    faces.forEach((face, index) => {
+    consistentFaces.forEach((face, index) => {
         console.debug(`Creating face box ${index} at:`, face);
         const faceBox = document.createElement('div');
         faceBox.className = 'face-cutout';
